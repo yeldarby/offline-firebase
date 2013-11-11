@@ -68,7 +68,6 @@ OfflineFirebase.store = function(snapshot) {
 	var exportVal = snapshot.exportVal();
 	
 	OfflineFirebase._walk(initialPath, exportVal, function(path, data) {
-		console.log('storing ' + path);
 		localStorage.setItem(OfflineFirebase.namespace + path, JSON.stringify(data));
 	});
 }
@@ -177,14 +176,12 @@ OfflineFirebase.restore = function() {
 	var subQueue, data;
 	while(subQueue = dataQueue.pop()) {
 		while(data = subQueue.pop()) {
-			console.log('Setting ' + data.url + ' to ' + data.val);
 			new OfflineFirebase(data.url).set(data.val);
 		}
 	}
 	
 	// Now that the data is there we can set the priorities
 	for(var url in priorityQueue) {
-		console.log('Priority ' + url + ' to ' + priorityQueue[url]);
 		new OfflineFirebase(url).setPriority(priorityQueue[url]);
 	}
 }
