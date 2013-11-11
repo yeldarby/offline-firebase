@@ -75,6 +75,9 @@ OfflineFirebase.store = function(snapshot) {
 	var initialPath = snapshot.ref().toString();
 	var exportVal = snapshot.exportVal();
 	
+	// We need to clear already cached data in case data has been removed.
+	OfflineFirebase._clearPath(initialPath);
+	
 	OfflineFirebase._walk(initialPath, exportVal, function(path, data) {
 		localStorage.setItem(OfflineFirebase.namespace + 'partial_' + path, JSON.stringify(data));	// Update individual paths
 	});
@@ -88,6 +91,19 @@ OfflineFirebase.store = function(snapshot) {
 	*/
 	localStorage.setItem(OfflineFirebase.namespace + 'full_' + initialPath, 1);
 };
+
+/*
+	Clears data for this path and all children under it from localStorage.
+*/
+OfflineFirebase._clearPath = function(path) {
+	for(var key in localStorage) {
+		var indexOfPath = key.indexOf(OfflineFirebase.namespace + 'partial_' + path);
+		if(indexOfPath === 0) {
+			// This is a component of the path so we need to clear it.
+			localStorage.removeItem(key);
+		}
+	}
+}
 
 /*
 	Recursively traverses a primitive JavaScript object that represents the
