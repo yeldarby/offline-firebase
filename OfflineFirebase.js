@@ -34,7 +34,7 @@ OfflineFirebase.prototype.on = function(eventType, callback, cancelCallback, con
 
 	// Register the callback with the superclass.
 	OfflineFirebase.superClass_.on.call(this, eventType, metaCallback, cancelCallback, context);
-}
+};
 
 /*
 	Also override the .once(...) method in a similar manner
@@ -53,7 +53,15 @@ OfflineFirebase.prototype.once = function(eventType, callback, cancelCallback, c
 
 	// Register the callback with the superclass.
 	OfflineFirebase.superClass_.once.call(this, eventType, metaCallback, cancelCallback, context);
-}
+};
+
+/*
+	Override the child method to return a subclassed OfflineFirebase instead of an instance of
+	the superclass.
+*/
+OfflineFirebase.prototype.child = function(pathString) {
+	return new OfflineFirebase(this.toString() + '/' + pathString);
+};
 
 /*
 	Stores the data from a snapshot in localStorage so we can restore it
@@ -68,9 +76,18 @@ OfflineFirebase.store = function(snapshot) {
 	var exportVal = snapshot.exportVal();
 	
 	OfflineFirebase._walk(initialPath, exportVal, function(path, data) {
-		localStorage.setItem(OfflineFirebase.namespace + path, JSON.stringify(data));
+		localStorage.setItem(OfflineFirebase.namespace + 'partial_' + path, JSON.stringify(data));	// Update individual paths
 	});
-}
+	
+	// Log this global path as saved since we need to set it at its topmost node so it can be retrieved.
+	// We will recompose it from its parts when saving so that we're sure we have the freshest data.
+	// Also note, that if we have already stored one of its parents, we need not set this but we do anyway.
+	/*
+		Note: if you set /a/b and /a/c, retrieving /a will not be cached since Firebase doesn't know that
+		/a/b and /a/c make up the complete contents of /a.
+	*/
+	localStorage.setItem(OfflineFirebase.namespace + 'full_' + initialPath, 1);
+};
 
 /*
 	Recursively traverses a primitive JavaScript object that represents the
@@ -110,7 +127,7 @@ OfflineFirebase._walk = function(path, exportVal, callback) {
 			OfflineFirebase._walk(childPath, exportVal[child], callback);
 		}
 	}
-}
+};
 
 /*
 	Takes all objects stored locally and performs a Firebase set operation
@@ -123,34 +140,60 @@ OfflineFirebase._walk = function(path, exportVal, callback) {
 	Eg, in the case of high-scores, your .validate should enforce that the
 	new value is higher than the old value. Or store a timestamp that takes
 	the newest value of the 2.
+	
+	Currently O(n^2) on number of items in localStorage but I suspect we can
+	do better... hasn't become a bottleneck for me yet, though.
 */ 
 OfflineFirebase.restore = function() {
-	// Data to write to Firebase to set their internal cache
-	/*
-		Note: we pull this all from localStorage before doing any writes
-		in case there are any .on() listeners already setup that will write
-		to our localStorage cache when Firebase updates so that we don't
-		get weird behavior by editing localStorage while we're iterating
-		through it.
-	*/
-	var dataQueue = [];
-	
-	// Queue with priorities to set
-	/*
-		Note: we set priorities *after* the entire data tree is restored
-		because you can't set a priority of a non-existant data node.
-	*/
-	var priorityQueue = {};	// Lols since this is a queue of priorities.. not a priority queue.
-
 	for(var key in localStorage) {
-		if(key && key.indexOf(OfflineFirebase.namespace) === 0) {
+		if(key && key.indexOf(OfflineFirebase.namespace + 'full_') === 0) {
 			// This is one of our cached values
 			
-			var url = key.substring(OfflineFirebase.namespace.length);	// Remove the namespace to retrieve the URL
-			var val = JSON.parse(localStorage[key]);
+			var url = key.substring( (OfflineFirebase.namespace + 'full_' ).length );	// Remove the namespace to retrieve the URL
+			var val = OfflineFirebase._reconstitute(url);
 			
+			console.log('Setting ' + url + ' to', val);
+			
+			var ref = new OfflineFirebase(url);
+			ref.on('value', function() {}); // Register a callback so Firebase will cache this location
+			ref.set(val); // Populate it with a value
+		}
+	}
+}
+
+/*
+	Reconstitute a value from the sum of its parts (which are residing in localStorage).
+*/
+OfflineFirebase._reconstitute = function(path) {
+	var ret = {};
+
+	for(var key in localStorage) {
+		var indexOfPath = key.indexOf(OfflineFirebase.namespace + 'partial_' + path);
+		if(indexOfPath === 0) {
+			// This is a component of the path so we need to add it to ret.
+			
+			var val = JSON.parse(localStorage[key]);
+			var subKey = key.substring( (OfflineFirebase.namespace + 'partial_' + path).length ); // The path to this node relative to our root.
+			
+			// Create the nested object for this fragment if it doesn't already exist
+			var currentTarget = ret;
+			if(subKey) {
+				var parts = subKey.split('/');
+				
+				for(var i=0; i<parts.length; i++) {
+					if(!parts[i]) continue;
+					if(typeof currentTarget[parts[i]] == 'undefined') currentTarget[parts[i]] = {};
+					currentTarget = currentTarget[parts[i]];
+				}
+			}
+			
+			// Set the priority and value for our nested object
 			if(typeof val == 'object') {
-				if(val['.priority']) priorityQueue[url] = val['.priority'];
+				if(val['.priority']) {
+					currentTarget['.priority'] = val['.priority'];
+				} else {
+					currentTarget['.priority'] = null;
+				}
 				
 				if(val['.value']) {
 					// If this also contains a value primitive, escalate that.
@@ -161,30 +204,12 @@ OfflineFirebase.restore = function() {
 				}
 			}
 			
-			var priority = url.match(/\//); // Priority is the depth
-			priority = priority?priority.length:0;	// Hack since .match() returns null if no matches were found (and an array otherwise)
-			
-			if(typeof dataQueue[priority] == 'undefined') dataQueue[priority] = [];
-			dataQueue[priority].push({
-				url: url,
-				val: val
-			});
+			currentTarget['.value'] = val;
 		}
 	}
 	
-	// Iterate through the data from deepest to shallowest
-	var subQueue, data;
-	while(subQueue = dataQueue.pop()) {
-		while(data = subQueue.pop()) {
-			new OfflineFirebase(data.url).set(data.val);
-		}
-	}
-	
-	// Now that the data is there we can set the priorities
-	for(var url in priorityQueue) {
-		new OfflineFirebase(url).setPriority(priorityQueue[url]);
-	}
-}
+	return ret;
+};
 
 /*
 	Clear the localStorage of all OfflineFirebase related items.
@@ -199,4 +224,4 @@ OfflineFirebase.clear = function() {
 			localStorage.removeItem(key);
 		}
 	}
-}
+};
