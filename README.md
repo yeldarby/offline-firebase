@@ -9,7 +9,7 @@ available.
 
 Firebase handles the syncing once the server is available part natively.
 
-This extension add cold-start support to repopulate Firebase's local cache with data that has been stored in localStorage.
+This extension adds cold-start support to repopulate Firebase's local cache with data that has been stored in localStorage.
 
 To use this, you'll need to include the unminified Firebase script on your site.
 It is available on their CDN here: http://cdn.firebase.com/v0/firebase-debug.js
