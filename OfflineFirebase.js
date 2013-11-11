@@ -152,8 +152,6 @@ OfflineFirebase.restore = function() {
 			var url = key.substring( (OfflineFirebase.namespace + 'full_' ).length );	// Remove the namespace to retrieve the URL
 			var val = OfflineFirebase._reconstitute(url);
 			
-			console.log('Setting ' + url + ' to', val);
-			
 			var ref = new OfflineFirebase(url);
 			ref.on('value', function() {}); // Register a callback so Firebase will cache this location
 			ref.set(val); // Populate it with a value
