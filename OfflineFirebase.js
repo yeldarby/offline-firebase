@@ -9,6 +9,9 @@ goog.inherits(OfflineFirebase, Firebase);
 /*
 	Override the Firebase .on(...) method to allow us to hijack and cache
 	data as it comes in.
+	
+	Note the cacheOffline flag that has been added to this method. In order
+	to enable the offline caching, set this to true.
 */
 OfflineFirebase.prototype.on = function(eventType, callback, cacheOffline) {
 	var metaCallback = callback;
