@@ -93,7 +93,7 @@ OfflineFirebase._walk = function(path, exportVal, callback) {
 			// "Leaf" node: complex type with defined priority
 			/*
 				Note: this is a "leaf" because it needs a node in localStorage
-				to store its children but it also has children that we need
+				to store its priority but it also has children that we need
 				to iterate over. This is probably an abuse of the "leaf"
 				nomenclature.
 			*/
