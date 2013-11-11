@@ -1,40 +1,67 @@
+/*
+	Extend the Firebase class.
+*/
 function OfflineFirebase(url) {
 	goog.base(this, url);
 }
 goog.inherits(OfflineFirebase, Firebase);
 
-OfflineFirebase.prototype.auth = function(cred, onComplete, onCancel) {
-	OfflineFirebase.superClass_.auth.call(this, cred, onComplete, onCancel);
-}
+/*
+	Override the Firebase .on(...) method to allow us to hijack and cache
+	data as it comes in.
+*/
+OfflineFirebase.prototype.on = function(eventType, callback, cacheOffline) {
+	var metaCallback = callback;
+	
+	if(cacheOffline) {
+		metaCallback = function(snapshot) {
+			// Store value locally so we can restore it later.
+			OfflineFirebase.store(snapshot);
+		
+			callback(snapshot);
+		};
+	}
 
-OfflineFirebase.prototype.on = function(eventType, callback) {
-	var metaCallback = function(snapshot) {
-		callback(snapshot);
-	};
-
+	// Register the callback with the superclass.
 	OfflineFirebase.superClass_.on.call(this, eventType, metaCallback);
 }
 
-OfflineFirebase.prototype.set = function(newVal, onComplete) {
-	OfflineFirebase.superClass_.set.call(this, newVal, onComplete);
+/*
+	Stores the data from a snapshot in localStorage so we can restore it
+	later.
+	
+	This works by retrieving the .exportVal() from the snapshot, iterating
+	over the object tree, and storing each leaf (a leaf is defined as a node
+	named ".value" or ".priority") into a localStorage item.
+*/
+OfflineFirebase.store = function(snapshot) {
+	var exportVal = snapshot.exportVal();
+	
+	
 }
 
-OfflineFirebase.prototype.setWithPriority = function(newVal, newPriority, onComplete) {
-	OfflineFirebase.superClass_.setWithPriority.call(this, newVal, newPriority, onComplete);
+/*
+	Takes all objects stored locally and performs a Firebase set operation
+	to initialize the Firebase cache on a cold bootup.
+
+	Note: this will overwrite the server value so you should use .validate
+	rules to ensure that the proper data is used in the event of a merge
+	conflict.
+
+	Eg, in the case of high-scores, your .validate should enforce that the
+	new value is higher than the old value. Or store a timestamp that takes
+	the newest value of the 2.
+*/ 
+OfflineFirebase.restore = function() {
+	
 }
 
-OfflineFirebase.prototype.update = function(objectToMerge, onComplete) {
-	OfflineFirebase.superClass_.update.call(this, objectToMerge, onComplete);
-}
-
-OfflineFirebase.prototype.push = function(value, onComplete) {
-	OfflineFirebase.superClass_.push.call(this, value, onComplete);
-}
-
-OfflineFirebase.prototype.remove = function(onComplete) {
-	OfflineFirebase.superClass_.remove.call(this, onComplete);
-}
-
-OfflineFirebase.prototype.setPriority = function(priority, opt_onComplete) {
-	OfflineFirebase.superClass_.setPriority.call(this, priority, opt_onComplete);
+/*
+	Clear the localStorage of all OfflineFirebase related items.
+	
+	Note: these items will still be stored by Firebase's internal cache if
+	they have been requested (or stored) already on this page-load.
+*/
+OfflineFirebase.clear = function() {
+	
 }
