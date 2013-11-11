@@ -224,4 +224,4 @@ OfflineFirebase.clear = function() {
 			localStorage.removeItem(key);
 		}
 	}
-}
+};
